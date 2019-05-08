@@ -19,7 +19,7 @@ namespace CosmosDBTriggerScalingSample
             LeaseCollectionName = "CosmosDBChangeProcessorLeases",
             MaxItemsPerInvocation = 1,
             CreateLeaseCollectionIfNotExists = true)]IReadOnlyList<Document> input,
-            [Table("processingresults", Connection = "StorageConnectionString")] IAsyncCollector<ProcessingResult> tableOutput,
+            [Table("%ProcessingResultsTable%", Connection = "StorageConnectionString")] IAsyncCollector<ProcessingResult> tableOutput,
             ILogger log)
         {
             if (input == null || input.Count <= 0) return;
@@ -41,7 +41,7 @@ namespace CosmosDBTriggerScalingSample
                 ConnectionStringSetting = "CosmosDBConnectionString",
                 LeaseCollectionName = "CosmosDbChangeEnqueuerLeases",
                 CreateLeaseCollectionIfNotExists = true)]
-            IReadOnlyList<Document> input, [Queue("workqueue", Connection = "StorageConnectionString")]
+            IReadOnlyList<Document> input, [Queue("%QueueName%", Connection = "StorageConnectionString")]
             IAsyncCollector<QueueWorkItem> queueOutput, ILogger log)
         {
             if (input == null || input.Count <= 0) return;
@@ -59,13 +59,13 @@ namespace CosmosDBTriggerScalingSample
         }
 
         [FunctionName("QueueProcessor")]
-        public static async Task QueueProcessor([QueueTrigger("workqueue", Connection = "StorageConnectionString")]
+        public static async Task QueueProcessor([QueueTrigger("%QueueName%", Connection = "StorageConnectionString")]
             QueueWorkItem myQueueItem, [CosmosDB(
                                             databaseName: "%CosmosDBDatabase%",
                                             collectionName: "%CosmosDBCollection%",
                                             ConnectionStringSetting = "CosmosDBConnectionString",
                                             Id = "{Id}", PartitionKey = "{Partitionkey}")]Document document,
-            [Table("processingresults", Connection = "StorageConnectionString")] IAsyncCollector<ProcessingResult> tableOutput,
+            [Table("%ProcessingResultsTable%", Connection = "StorageConnectionString")] IAsyncCollector<ProcessingResult> tableOutput,
             ILogger log)
         {
             
