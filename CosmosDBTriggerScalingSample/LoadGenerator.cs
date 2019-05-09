@@ -15,7 +15,7 @@ namespace CosmosDBTriggerScalingSample
 {
     public static class LoadGenerator
     {
-        private const string CreateRecordFunctionName = "LoadGenerator_CreateRecord";
+        private const string SaveDocumentFunctionName = "LoadGenerator_SaveDocument";
         private const string LoadGeneratorFunctionName = "LoadGenerator";
         private static readonly CosmosDBConnectionString ConnectionString = new CosmosDBConnectionString(Environment.GetEnvironmentVariable("CosmosDBConnectionString"));
         private static readonly string DatabaseId = Environment.GetEnvironmentVariable("CosmosDBDatabase");
@@ -35,8 +35,8 @@ namespace CosmosDBTriggerScalingSample
                 Task[] taskList = new Task[options.ItemsPerRunCount];
                 for (int runItemNumber = 0; runItemNumber < options.ItemsPerRunCount; runItemNumber++)
                 {
-                    taskList[runItemNumber] = context.CallActivityAsync(CreateRecordFunctionName,
-                        $"{context.CurrentUtcDateTime.ToShortTimeString()}_{runNumber}_{runItemNumber}_{context.InstanceId}");
+                    taskList[runItemNumber] = context.CallActivityAsync(SaveDocumentFunctionName,
+                        CreateDocDBRecord(context, runNumber, runItemNumber, options));
                 }
 
                 await Task.WhenAll(taskList);
@@ -45,22 +45,30 @@ namespace CosmosDBTriggerScalingSample
             }
         }
 
-        [FunctionName(CreateRecordFunctionName)]
-        public static async Task CreateRecord([ActivityTrigger] string itemId, string instanceId, ILogger log)
+        private static DocDBRecord CreateDocDBRecord(DurableOrchestrationContext context, int runNumber, int runItemNumber,
+            GeneratorOptions options)
+        {
+            string docDbRecordId = $"{context.CurrentUtcDateTime.ToShortTimeString()}_{runNumber}_{runItemNumber}_{options.RunId}";
+            return new DocDBRecord()
+            {
+                Id = docDbRecordId,
+                RunNumber = runNumber,
+                RunItemNumber = runItemNumber,
+                RunId = options.RunId,
+                PartitionKey = Guid.NewGuid().ToString()
+            };
+        }
+
+        [FunctionName(SaveDocumentFunctionName)]
+        public static async Task SaveDocument([ActivityTrigger] DocDBRecord item, string instanceId, ILogger log)
         {
             using (DocumentClient client = new DocumentClient(ConnectionString.ServiceEndpoint, ConnectionString.AuthKey))
             {
                 Uri collectionUri = UriFactory.CreateDocumentCollectionUri(DatabaseId, CollectionId);
+                
+                await client.CreateDocumentAsync(collectionUri, item);
 
-                var document = new
-                {
-                    id = itemId,
-                    partitionkey = Guid.NewGuid()
-                };
-
-                await client.CreateDocumentAsync(collectionUri, document);
-
-                log.LogInformation($"Create record with id {itemId} for parent {instanceId}");
+                log.LogInformation("Create record with id {ItemId} for run {RunId}", item.Id, item.RunId);
             }
         }
 
@@ -70,14 +78,15 @@ namespace CosmosDBTriggerScalingSample
             [OrchestrationClient]DurableOrchestrationClient starter,
             ILogger log)
         {
-            
+            Guid runId = Guid.NewGuid();
             int partitionCount = await GetCosmosDBPartitionCount();
-            log.LogInformation($"Cosmos DB has {partitionCount} partitions");
+            log.LogInformation("Triggered run for {RunId}. Cosmos DB has {PartitionCount} partitions.", runId, partitionCount);
             GeneratorOptions generatorOptions = new GeneratorOptions
             {
                 RunCount = (60 / SleepTimeSeconds) * RuntimeMinutes,
                 ItemsPerRunCount = partitionCount * 2,
-                SleepTimeInSeconds = SleepTimeSeconds
+                SleepTimeInSeconds = SleepTimeSeconds,
+                RunId = runId.ToString()
             };
             string instanceId = await starter.StartNewAsync(LoadGeneratorFunctionName, generatorOptions);
             
@@ -112,5 +121,6 @@ namespace CosmosDBTriggerScalingSample
         public int RunCount { get; set; }
         public int ItemsPerRunCount { get; set; }
         public int SleepTimeInSeconds { get; set; }
+        public string RunId { get; set; }
     }
 }

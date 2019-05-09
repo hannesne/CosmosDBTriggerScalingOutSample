@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using CosmosDBTriggerScalingSample;
+using System.Threading.Tasks;
 
 internal static class ProcessorWorker
 {
@@ -11,12 +11,13 @@ internal static class ProcessorWorker
     public static readonly bool UseCPUBoundProcessing =
         bool.Parse(Environment.GetEnvironmentVariable("UseCPUBoundProcessing"));
 
-    public static void DoWork()
+    public static async Task DoWork()
     {
+
         if (!UseCPUBoundProcessing)
-            Thread.Sleep(ProcessingTime);
+            await Task.Delay(ProcessingTime);
         else
-            DoCPUWork();
+            await Task.Run(DoCPUWork);
     }
 
     private static void DoCPUWork()

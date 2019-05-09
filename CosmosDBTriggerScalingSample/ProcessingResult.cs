@@ -10,5 +10,6 @@ namespace CosmosDBTriggerScalingSample
         public DateTime ProcessedAt { get; set; }
         public string PartitionKey { get; set; }
         public TimeSpan ProcessingDuration { get; set; }
+        public string RunId { get; set; }
     }
 }
