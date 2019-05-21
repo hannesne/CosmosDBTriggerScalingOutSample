@@ -28,4 +28,4 @@ az storage queue create -n $storageQueueName --connection-string $storageAccount
 $functionAppName = "cosmosdbscaletestfunctions"
 az functionapp create -n $functionAppName -g $resourceGroupName -s $storageAccountName -c $location
 
-$localsettings | ConvertTo-Json >> local.settings.json
+$localsettings | ConvertTo-Json > local.settings.json
