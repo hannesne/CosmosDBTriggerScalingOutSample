@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Async;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,17 +25,23 @@ namespace CosmosDBTriggerScalingSample
             ILogger log)
         {
             if (input == null || input.Count <= 0) return;
-            foreach (DocDBRecord document in input.Select(DeserializeDocument))
-            {
-                await ProcessorWorker.DoWork();
 
-                await tableOutput.AddAsync(CreateProcessingResult(document, nameof(CosmosDbChangeProcessor), log));
-            }
+            await input.ParallelForEachAsync( async doc =>
+            {
+                await ProcessDocument(DeserializeDocument(doc), tableOutput, log, nameof(CosmosDbChangeProcessor));
+            });
+
         }
 
         private static DocDBRecord DeserializeDocument(Document doc)
         {
             return JsonConvert.DeserializeObject<DocDBRecord>(doc.ToString());
+        }
+
+        private static async Task ProcessDocument(DocDBRecord document, IAsyncCollector<ProcessingResult> tableOutput, ILogger log, string processorName)
+        {
+            await ProcessorWorker.DoWork();
+            await tableOutput.AddAsync(CreateProcessingResult(document, processorName, log));
         }
 
         [FunctionName("CosmosDbChangeEnqueuer")]
@@ -69,9 +76,7 @@ namespace CosmosDBTriggerScalingSample
             [Table("%ProcessingResultsTable%", Connection = "StorageConnectionString")] IAsyncCollector<ProcessingResult> tableOutput,
             ILogger log)
         {
-            await ProcessorWorker.DoWork();
-            await tableOutput.AddAsync(CreateProcessingResult(document, nameof(QueueProcessor), log));
-
+            await ProcessDocument(document, tableOutput, log, nameof(QueueProcessor));
         }
 
         private static ProcessingResult CreateProcessingResult(DocDBRecord document, string changeSource, ILogger log)
