@@ -1,0 +1,17 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+    "CosmosDBCollection": "scalingdata",
+    "CosmosDBDatabase": "CosmosDbScalingTest",
+    "CosmosDBConnectionString": "",
+    "LoadGeneratorDurationMinutes": 1,
+    "LoadGenerationCycleSleepDurationSeconds": 10,
+    "ItemProcessingDurationSeconds": 30,
+    "StorageConnectionString": "",
+    "UseCPUBoundProcessing": "True",
+    "ProcessingResultsTable": "processingresults",
+    "QueueName": "workqueue"
+  }
+}

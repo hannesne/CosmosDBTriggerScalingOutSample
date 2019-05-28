@@ -35,9 +35,9 @@ $instrumentationKey = az resource create -n $appInsightsName -g $resourceGroupNa
 
 Write-Host "Instrumentation Key = " $instrumentationKey
 
-$localsettings = (cat .\CosmosDBTriggerScalingSample\local.settings.json | Convertfrom-json)
+$localsettings = (cat .\local.settings.json.template | Convertfrom-json)
 $localsettings.Values.CosmosDBConnectionString = $cosmosDBConnectionString
-$localsettings.Values.StorageConnectionString = $storageAccountConnectionString
+$localsettings.Values.StorageConnectionString = $storageAccountConnectionString	
 $localsettings | ConvertTo-Json > local.settings.json
 
 Write-Host "Generated new localsettings file with new connection strings"
