@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using DurableTask.AzureStorage;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Documents;
 using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.WebJobs;
@@ -27,7 +29,7 @@ namespace CosmosDBTriggerScalingSample
         public static async Task RunOrchestrator(
             [OrchestrationTrigger] DurableOrchestrationContext context)
         {
-            GeneratorOptions options = context.GetInput<GeneratorOptions>();
+            LoadGeneratorOptions options = context.GetInput<LoadGeneratorOptions>();
             
             int runCount = options.RunCount;
             for (int runNumber = 0; runNumber < runCount; runNumber++)
@@ -35,8 +37,8 @@ namespace CosmosDBTriggerScalingSample
                 Task[] taskList = new Task[options.ItemsPerRunCount];
                 for (int runItemNumber = 0; runItemNumber < options.ItemsPerRunCount; runItemNumber++)
                 {
-                    taskList[runItemNumber] = context.CallActivityAsync(SaveDocumentFunctionName,
-                        CreateDocDBRecord(context, runNumber, runItemNumber, options));
+                    DocDBRecord docDbRecord = DocDBRecord.Create(runNumber, runItemNumber, options.RunId, context.CurrentUtcDateTime.ToShortTimeString());
+                    taskList[runItemNumber] = context.CallActivityAsync(SaveDocumentFunctionName, docDbRecord);
                 }
 
                 await Task.WhenAll(taskList);
@@ -45,22 +47,8 @@ namespace CosmosDBTriggerScalingSample
             }
         }
 
-        private static DocDBRecord CreateDocDBRecord(DurableOrchestrationContext context, int runNumber, int runItemNumber,
-            GeneratorOptions options)
-        {
-            string docDbRecordId = $"{context.CurrentUtcDateTime.ToShortTimeString()}_{runNumber}_{runItemNumber}_{options.RunId}";
-            return new DocDBRecord()
-            {
-                Id = docDbRecordId,
-                RunNumber = runNumber,
-                RunItemNumber = runItemNumber,
-                RunId = options.RunId,
-                PartitionKey = Guid.NewGuid().ToString()
-            };
-        }
-
         [FunctionName(SaveDocumentFunctionName)]
-        public static async Task SaveDocument([ActivityTrigger] DocDBRecord item, string instanceId, ILogger log)
+        public static async Task SaveDocument([ActivityTrigger] DocDBRecord item, ILogger log)
         {
             using (DocumentClient client = new DocumentClient(ConnectionString.ServiceEndpoint, ConnectionString.AuthKey))
             {
@@ -78,19 +66,14 @@ namespace CosmosDBTriggerScalingSample
             [OrchestrationClient]DurableOrchestrationClient starter,
             ILogger log)
         {
-            Guid runId = Guid.NewGuid();
+            string runId = Guid.NewGuid().ToString();
             int partitionCount = await GetCosmosDBPartitionCount();
             log.LogInformation("Triggered run for {RunId}. Cosmos DB has {PartitionCount} partitions.", runId, partitionCount);
-            GeneratorOptions generatorOptions = new GeneratorOptions
-            {
-                RunCount = (60 / SleepTimeSeconds) * RuntimeMinutes,
-                ItemsPerRunCount = partitionCount * 2,
-                SleepTimeInSeconds = SleepTimeSeconds,
-                RunId = runId.ToString()
-            };
-            string instanceId = await starter.StartNewAsync(LoadGeneratorFunctionName, generatorOptions);
-            
-            return starter.CreateCheckStatusResponse(req, instanceId);
+
+            LoadGeneratorOptions loadGeneratorOptions = LoadGeneratorOptions.Create(partitionCount, runId, RuntimeMinutes, SleepTimeSeconds);
+
+            await starter.StartNewAsync(LoadGeneratorFunctionName, loadGeneratorOptions);
+            return req.CreateResponse(loadGeneratorOptions);
         }
 
         private static async Task<int> GetCosmosDBPartitionCount()
@@ -114,13 +97,5 @@ namespace CosmosDBTriggerScalingSample
 
             return rangeCount;
         }
-    }
-
-    public class GeneratorOptions
-    {
-        public int RunCount { get; set; }
-        public int ItemsPerRunCount { get; set; }
-        public int SleepTimeInSeconds { get; set; }
-        public string RunId { get; set; }
     }
 }

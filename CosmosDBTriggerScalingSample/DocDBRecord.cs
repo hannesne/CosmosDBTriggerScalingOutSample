@@ -17,5 +17,18 @@ namespace CosmosDBTriggerScalingSample
 
         [JsonProperty("partitionkey")]
         public string PartitionKey;
+
+        public static DocDBRecord Create(int runNumber, int runItemNumber, string runId, string createdAt)
+        {
+            string docDbRecordId = $"{createdAt}_{runNumber}_{runItemNumber}_{runId}";
+            return new DocDBRecord()
+            {
+                Id = docDbRecordId,
+                RunNumber = runNumber,
+                RunItemNumber = runItemNumber,
+                RunId = runId,
+                PartitionKey = Guid.NewGuid().ToString()
+            };
+        }
     }
 }
